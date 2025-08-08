@@ -1,0 +1,19 @@
+[
+  {
+    "NroCuenta": "123456789",
+    "NroServicioEJESA": "",
+    "Telefono": "1122334455",
+    "Categoria": "Reclamo",
+    "Tipo": "Comercial",
+    "Referencia": "Calle Falsa 123",
+    "Descripcion": "El servicio se cort� varias veces"
+  },
+  {
+    "NroCuenta": "12345678",
+    "Telefono": "3881234567",
+    "Categoria": "Luz",
+    "Tipo": "Operativo",
+    "Referencia": "Frente de casa",
+    "Descripcion": "Falla de energía en el poste"
+  }
+]

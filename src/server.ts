@@ -2,6 +2,7 @@ import express from 'express'
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { main } from './app'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -53,7 +54,16 @@ app.post('/recibirreclamo', (req, res) => {
   return res.json({ status: 'ok', message: 'Reclamo recibido correctamente' })
 })
 
-app.listen(PORT, '0.0.0.0', () => {
+
+const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`API activa en http://0.0.0.0:${PORT}`)
 })
 
+
+main()
+  .then(() => console.log('Bot iniciado'))
+  .catch((err) => {
+    console.error('Error al iniciar el bot:', err)
+
+    server.close()
+  })

@@ -17,75 +17,89 @@ const app = express()
 app.use(express.json())
 
 app.post('/recibirreclamo', (req, res) => {
-  const data = req.body
+  try {
+    console.log('POST /recibirreclamo - Body recibido:', req.body)
 
-  const requiredKeys = ['NroCuenta', 'Telefono', 'Categoria', 'Tipo', 'Referencia', 'Descripcion']
-  const missing = requiredKeys.filter(key => !(key in data) || data[key] === '' || data[key] === null)
+    const data = req.body
 
-  if (missing.length > 0) {
-    return res.status(400).json({ error: `Faltan campos obligatorios: ${missing.join(', ')}` })
-  }
+    const requiredKeys = ['NroCuenta', 'Telefono', 'Categoria', 'Tipo', 'Referencia', 'Descripcion']
+    const missing = requiredKeys.filter(key => !(key in data) || data[key] === '' || data[key] === null)
 
-  const tiposValidos = ['Comercial', 'Operativo']
-  if (!tiposValidos.includes(data.Tipo)) {
-    return res.status(400).json({ error: `Tipo inválido. Debe ser uno de: ${tiposValidos.join(', ')}` })
-  }
-
-  const dataDir = path.join(__dirname, 'data')
-  const filePath = path.join(dataDir, 'reclamo.json')
-
-  if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir)
-  }
-
-  let reclamos: any[] = []
-  if (fs.existsSync(filePath)) {
-    const fileContent = fs.readFileSync(filePath, 'utf-8')
-    try {
-      reclamos = JSON.parse(fileContent)
-      if (!Array.isArray(reclamos)) reclamos = []
-    } catch {
-      reclamos = []
+    if (missing.length > 0) {
+      console.warn('Faltan campos obligatorios:', missing)
+      return res.status(400).json({ error: `Faltan campos obligatorios: ${missing.join(', ')}` })
     }
+
+    const tiposValidos = ['Comercial', 'Operativo']
+    if (!tiposValidos.includes(data.Tipo)) {
+      console.warn('Tipo inválido recibido:', data.Tipo)
+      return res.status(400).json({ error: `Tipo inválido. Debe ser uno de: ${tiposValidos.join(', ')}` })
+    }
+
+    const dataDir = path.join(__dirname, 'data')
+    const filePath = path.join(dataDir, 'reclamo.json')
+
+    if (!fs.existsSync(dataDir)) {
+      console.log('Carpeta data no existe, creando...')
+      fs.mkdirSync(dataDir)
+    }
+
+    let reclamos = []
+    if (fs.existsSync(filePath)) {
+      const fileContent = fs.readFileSync(filePath, 'utf-8')
+      try {
+        reclamos = JSON.parse(fileContent)
+        if (!Array.isArray(reclamos)) reclamos = []
+      } catch (parseError) {
+        console.error('Error parseando reclamo.json:', parseError)
+        reclamos = []
+      }
+    }
+
+    reclamos.push(data)
+
+    fs.writeFileSync(filePath, JSON.stringify(reclamos, null, 2))
+    console.log('Reclamo guardado correctamente:', data)
+
+    return res.json({ status: 'ok', message: 'Reclamo recibido correctamente' })
+  } catch (err) {
+    console.error('Error interno en /recibirreclamo:', err)
+    return res.status(500).json({ error: 'Error interno del servidor' })
   }
-
-  reclamos.push(data)
-
-  fs.writeFileSync(filePath, JSON.stringify(reclamos, null, 2))
-
-  return res.json({ status: 'ok', message: 'Reclamo recibido correctamente' })
 })
-
 
 const reclamoFlow = addKeyword('reclamo')
   .addAnswer('Un momento, estoy consultando tu reclamo...')
   .addAction(async (ctx, { flowDynamic }) => {
     try {
-      const filePath = path.join(process.cwd(), 'src', 'data', 'reclamo.json');
-      const jsonData = await fsPromises.readFile(filePath, 'utf-8');
-      const reclamos = JSON.parse(jsonData);
+      const filePath = path.join(process.cwd(), 'src', 'data', 'reclamo.json')
+      console.log('Leyendo archivo reclamo.json en:', filePath)
+      const jsonData = await fsPromises.readFile(filePath, 'utf-8')
+      const reclamos = JSON.parse(jsonData)
+      console.log('Reclamos cargados:', reclamos.length)
 
       if (Array.isArray(reclamos) && reclamos.length > 0) {
-        const ultimo = reclamos[reclamos.length - 1];
+        const ultimo = reclamos[reclamos.length - 1]
+        console.log('Último reclamo:', ultimo)
         const mensajes = [
           { body: '*Último Reclamo recibido:*' },
-          
           { body: `- NroCuenta: ${ultimo.NroCuenta}` },
           { body: `- Telefono: ${ultimo.Telefono}` },
           { body: `- Categoria: ${ultimo.Categoria}` },
           { body: `- Tipo: ${ultimo.Tipo}` },
           { body: `- Referencia: ${ultimo.Referencia}` },
           { body: `- Descripción: ${ultimo.Descripcion}` }
-        ];
-        await flowDynamic(mensajes);
+        ]
+        await flowDynamic(mensajes)
       } else {
-        await flowDynamic([{ body: 'No hay reclamos registrados aún.' }]);
+        console.log('No hay reclamos registrados aún.')
+        await flowDynamic([{ body: 'No hay reclamos registrados aún.' }])
       }
     } catch (error) {
-      console.error('Error leyendo reclamo.json:', error);
-      await flowDynamic([{ body: 'Hubo un problema al procesar tu reclamo. Por favor, intenta más tarde.' }]);
+      console.error('Error leyendo reclamo.json:', error)
+      await flowDynamic([{ body: 'Hubo un problema al procesar tu reclamo. Por favor, intenta más tarde.' }])
     }
-  });
+  })
 
 const adapterFlow = createFlow([reclamoFlow])
 const adapterProvider = createProvider(Provider)
@@ -101,9 +115,24 @@ async function startBot() {
   adapterProvider.server.post(
     '/v1/messages',
     handleCtx(async (bot, req, res) => {
-      const { number, message, urlMedia } = req.body
-      await bot.sendMessage(number, message, { media: urlMedia ?? null })
-      return res.end('sended')
+      try {
+        console.log('POST /v1/messages recibido:', req.body)
+
+        const { number, message, urlMedia } = req.body
+
+        if (!number || !message) {
+          console.warn('Faltan number o message en el body:', req.body)
+          return res.status(400).json({ error: 'Faltan number o message' })
+        }
+
+        await bot.sendMessage(number, message, { media: urlMedia ?? null })
+        console.log(`Mensaje enviado a ${number}`)
+
+        return res.status(200).send('sended')
+      } catch (error) {
+        console.error('Error enviando mensaje:', error)
+        return res.status(500).json({ error: 'Error interno al enviar mensaje' })
+      }
     })
   )
 
